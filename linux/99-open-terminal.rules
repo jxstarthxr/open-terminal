@@ -1,0 +1,10 @@
+# OPEN TERMINAL - lets Chromium browsers (Chrome, Edge, Brave, Opera) talk to supported devices over WebHID on Linux.
+# Without this, Linux only lets root open the device and the browser shows a connection error.
+#
+# Install:
+#   sudo cp 99-open-terminal.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+# then unplug and replug the device.
+
+# IYX MU68 (Witmod, Nuvoton M484)
+KERNEL=="hidraw*", ATTRS{idVendor}=="0416", ATTRS{idProduct}=="7372", TAG+="uaccess"
