@@ -2003,6 +2003,7 @@ async function boot() {
   for (let i = 0; i < 26; i++) bar.append(el("i", { style: "opacity:0" }));
   let target = 0, shown = 0, stepKey = "boot.init";
   const draw = () => {
+    if (!$("boot")) return;  // a frame paused in a background tab can run after the loader is gone
     shown += (target - shown) * 0.12;
     if (target - shown < 0.002) shown = target;
     const filled = Math.round(shown * 26);
