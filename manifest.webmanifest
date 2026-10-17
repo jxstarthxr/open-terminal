@@ -1,7 +1,7 @@
 {
-  "name": "IYX TERMINAL",
-  "short_name": "IYX",
-  "description": "Offline configurator for the IYX MU68 keyboard",
+  "name": "OPEN TERMINAL",
+  "short_name": "OPEN",
+  "description": "Offline browser configurator for keyboards and other devices",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
