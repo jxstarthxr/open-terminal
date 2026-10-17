@@ -93,7 +93,7 @@
   .kbcase svg .soft { fill: none; stroke: var(--line); }
   .kbcase.drawing svg .edge, .kbcase.drawing svg .soft { stroke-dasharray: 1 1; stroke-dashoffset: 1; animation: draw 1.2s cubic-bezier(.4, 0, .2, 1) forwards; }
   @keyframes draw { to { stroke-dashoffset: 0; } }
-  .caselogo { position: absolute; margin: 0 -.35em 0 0; font: 11px/1 "IYX Mono", Consolas, monospace; letter-spacing: .35em;
+  .caselogo { position: absolute; margin: 0 -.2em 0 0; font: 22px/1 "IYX Mono", Consolas, monospace; letter-spacing: .2em;
     white-space: pre; pointer-events: none; }
   .kbcase.drawing .caselogo { animation: fadeIn .4s 1.1s ease both; }
   /* leaving: keys fade out right to left, then the outline un-draws */
@@ -697,7 +697,8 @@ const FN_LOCKED = new Set([256, 257, 258, 259, 260, 261, 262, 263, 264, 265, 266
 // every side; handle, slot, ramp, corners and logo keep the photo's measurements.
 const CASE = {
   openingW: 666,
-  bezel: 8,                      // photo average of 6.5 / 10 / 8.5 / 6 (left / right / top / bottom)
+  // Real dimensions (user-measured): 3 mm sides, 10 mm front ramp, logo = half the ramp height, centred.
+  sideMm: 3, rampMm: 10, keyPitchMm: 19.05,
   rTop: 6, rBottom: 5.5,         // corner radii
   handle: { out: 15, straight: 72, chamferEnd: 83,  // strap holder sticks out 15, runs 72 down, tapers back by 83
     taper: [[1.5, 74.5], [5, 76.5], [8, 78.5], [12, 80.5]],  // measured points of the taper, from handle left/top
@@ -1632,11 +1633,13 @@ function buildKeyboard() {
   const u = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--u"));
   const s = (16 * u) / CASE.openingW;   // screen px per photo px
   const W = 16 * u, H = 5 * u;          // key grid; the case is drawn around it in screen px
-  const b = CASE.bezel * s, h = CASE.handle;
-  // keys share 1px borders, so the grid's visible edges are at -1 (left/top) and W/H (right/bottom)
-  // The front ramp holds the IYX logo with a gap above and below it equal to the bezel (as on the real case).
-  const LOGO_INK = 8, LOGO_INK_OFFSET = 1;  // visible cap height of the 11px font, and its offset inside the line box
-  const L = -1 - b, R = W + b, T = -1 - b, rampY = H + b, B = rampY + 2 * b + LOGO_INK, HL = L - h.out * s;
+  const mm = u / CASE.keyPitchMm;      // screen px per real mm (one key = 19.05 mm)
+  const b = CASE.sideMm * mm, h = CASE.handle;
+  // keys share 1px borders: the grid's visible edges are at -1 (left/top), W (right) and H - 1 (bottom border line)
+  // The 10 mm front ramp holds the IYX logo centred, taking about half of its height (as on the real case).
+  // logo at 22px (2x the terminal font, still pixel-crisp): 16px cap height, 2px offset inside its line box
+  const LOGO_INK = 16, LOGO_INK_OFFSET = 2;
+  const L = -1 - b, R = W + b, T = -1 - b, rampY = H - 1 + b, B = rampY + CASE.rampMm * mm, HL = L - h.out * s;
   const rt = CASE.rTop * s, rb = CASE.rBottom * s;
   const p = (x, y) => `${x.toFixed(2)},${y.toFixed(2)}`;
   const outline = `M${p(HL, T + rt)} Q${p(HL, T)} ${p(HL + rt, T)} L${p(R - rt, T)} Q${p(R, T)} ${p(R, T + rt)} ` +
@@ -1663,12 +1666,10 @@ function buildKeyboard() {
   path(slot, "edge");
   path(`M${p(L, rampY)} L${p(R, rampY)}`, "soft");
 
-  // Carved logo in terminal characters at the site's 11px scale: right edge where the real one sits,
-  // centred vertically on the ramp (2 lines of 11px).
-  // One 11px line: the real logo has a gap above and below it as big as the bezel.
+  // Carved logo in terminal text, right edge where the real one sits, centred vertically on the ramp.
   const logo = el("pre", { class: "caselogo" }, "IYX");
   logo.style.right = W - (R - CASE.logoInset * s) + "px";
-  logo.style.top = rampY + b - LOGO_INK_OFFSET + "px";
+  logo.style.top = rampY + (B - rampY - LOGO_INK) / 2 - LOGO_INK_OFFSET + "px";
   $("kbcase").append(logo);
   $("kbcase").style.height = H + "px";
   $("kbcase").style.marginTop = -T + 6 + "px";
