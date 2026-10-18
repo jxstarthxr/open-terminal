@@ -52,7 +52,13 @@
 
   /* intro */
   .booting .intro, .booting .fade, .booting #banner { opacity: 0; animation: none; }
-  .intro { animation: slideIn .45s cubic-bezier(.2, .7, .2, 1) both; }
+  /* curtain: after the loader two black halves with a white inner edge slide apart (as on terminal.wallhack.com) */
+  .curtain { position: fixed; inset: 0; display: flex; z-index: 38; pointer-events: none; }
+  .curtain div { width: 50%; height: 100%; background: #000; transition: transform 1s cubic-bezier(.4, 0, .2, 1); }
+  .curtain .cl { border-right: 1px solid var(--ink); }
+  .curtain .cr { border-left: 1px solid var(--ink); }
+  .curtain.open .cl { transform: translateX(-100%); }
+  .curtain.open .cr { transform: translateX(100%); }
   @keyframes slideIn { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
   .fade { animation: fadeIn .5s ease both; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -88,7 +94,21 @@
   .kbhead { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 26px; width: calc(16 * var(--u) + 40px); padding-left: 40px; }
   .kbhead .acts { display: flex; gap: 18px; }
   .kbcase { position: relative; margin-left: 40px; }
-  #kbArea.hidden { display: none; }
+  #kbArea.hidden, #mouseArea.hidden { display: none; }
+  .mousecase { margin: 30px 0 0 40px; }
+  .mousecase svg { overflow: visible; }
+  .mousecase .edge { fill: none; stroke: var(--ink); }
+  .mousecase .soft { fill: none; stroke: var(--line); }
+  .mousecase .zone { fill: transparent; cursor: pointer; }
+  .mousecase .zone:hover { fill: rgb(var(--ink-rgb) / .06); }
+  .mousecase .zone.sel { fill: rgb(var(--ink-rgb) / .14); }
+  .mousecase .zone.down { fill: rgb(var(--accent-rgb) / .8); }
+  .mousecase .lbl { fill: var(--dim); font: 11px "Open Mono", Consolas, monospace; text-anchor: middle; pointer-events: none; }
+  .mousecase .lbl.custom { fill: var(--ink); }
+  .mousecase.drawing .edge, .mousecase.drawing .soft { stroke-dasharray: 1 1; stroke-dashoffset: 1; animation: draw 1.2s cubic-bezier(.4, 0, .2, 1) forwards; }
+  .mousecase.drawing .lbl { animation: fadeIn .4s 1s ease both; }
+  #mouseArea.leaving .kbhead, #mouseArea.leaving .kbfoot, #mouseArea.leaving .lbl { animation: fadeOut .3s ease both; }
+  #mouseArea.leaving .edge, #mouseArea.leaving .soft { stroke-dasharray: 1 1; animation: undraw .7s .2s cubic-bezier(.4, 0, .2, 1) both; }
   .kbcase svg { position: absolute; overflow: visible; pointer-events: none; }
   /* stroke width is set from JS in photo units so it renders as 1px; the dash drawing needs normal (scaling) strokes */
   .kbcase svg .edge { fill: none; stroke: var(--ink); }
@@ -162,6 +182,11 @@
       <div class="kbcase" id="kbcase"><svg id="caseSvg"></svg><div class="kb" id="kb"></div></div>
       <div class="kbfoot fade" id="kbfoot" style="animation-delay:2.2s"></div>
     </div>
+    <div id="mouseArea" class="hidden">
+      <div class="kbhead fade" style="animation-delay:.3s"><span id="mousePrompt"></span><span class="acts"></span></div>
+      <div class="mousecase" id="mousecase"><svg id="mouseSvg"></svg></div>
+      <div class="kbfoot fade" id="mousefoot" style="animation-delay:1.4s"></div>
+    </div>
   </div>
 </div>
 
@@ -174,6 +199,8 @@
   <div class="status" id="statusLine">&gt;</div>
   <div class="status" id="offline"></div>
 </footer>
+
+<div class="curtain" id="curtain"><div class="cl"></div><div class="cr"></div></div>
 
 <div class="boot" id="boot">
   <div class="step"><span id="bootStep"></span><span class="cursor">_</span></div>
@@ -291,6 +318,76 @@ const I18N = {
     "h.kb.resetKeysets": "Reset keysets|Removes every keyset on this page; all keys go back to the global value.",
     "h.kb.resetLayer": "Reset layer|Puts every key on this layer back to its factory output.",
     "h.help": "Help|Shows what the selected element does.", "h.lang": "Language|Changes the interface language.",
+    "dev.keyboards": "KEYBOARDS",
+    "dev.mice": "MICE",
+    "st.mouseConnected": "CONNECTED",
+    "st.btnMapped": "{b} -> {a}",
+    "tab.dpi": "DPI",
+    "tab.poll": "POLLING",
+    "tab.sensor": "SENSOR",
+    "tab.buttons": "BUTTONS",
+    "tab.power": "POWER",
+    "tab.dongle": "DONGLE",
+    "tab.madv": "ADVANCED",
+    "h.tab.dpi": "DPI|Sensitivity stages. The mouse's DPI button cycles through them.",
+    "h.tab.poll": "Polling|How often the mouse reports to the PC.",
+    "h.tab.sensor": "Sensor|Lift-off distance and motion sync.",
+    "h.tab.buttons": "Buttons|Change what each mouse button does.",
+    "h.tab.power": "Power|Battery, sleep timer and low-power mode.",
+    "h.tab.dongle": "Dongle|The wireless receiver this mouse is paired with.",
+    "h.tab.madv": "Advanced|Device info and profile sharing.",
+    "dpi.count": "DPI STAGES",
+    "dpi.active": "ACTIVE STAGE",
+    "dpi.step": "DPI STEP",
+    "dpi.stage": "STAGE {n}",
+    "h.dpi.count": "DPI stages|How many stages the DPI button cycles through.",
+    "h.dpi.active": "Active stage|The stage the mouse uses right now.",
+    "h.dpi.step": "DPI step|How much each < or > press changes a stage.",
+    "h.dpi.stage": "Stage|Sensitivity of this stage in DPI (dots per inch).",
+    "h.mpoll": "Polling rate|How often the mouse reports its movement. Higher is smoother but uses more battery and CPU.",
+    "mpoll.note": "AVAILABLE ON THIS CONNECTION: {list} HZ",
+    "sensor.lod": "LIFT-OFF DISTANCE",
+    "sensor.ms": "MOTION SYNC",
+    "h.sensor.lod": "Lift-off distance|How high the mouse can be lifted before the sensor stops tracking.",
+    "h.sensor.ms": "Motion sync|Aligns sensor reads with the polling interval for steadier tracking, at a tiny latency cost.",
+    "btn.left": "LEFT",
+    "btn.right": "RIGHT",
+    "btn.middle": "WHEEL CLICK",
+    "btn.back": "SIDE BACK",
+    "btn.fwd": "SIDE FORWARD",
+    "btn.wheelUp": "WHEEL UP",
+    "btn.wheelDown": "WHEEL DOWN",
+    "btn.select": "> SELECT A BUTTON ABOVE OR ON THE MOUSE",
+    "btn.pick": "> {b}: SELECT AN ACTION",
+    "btn.reset": "RESET ALL BUTTONS",
+    "h.btn": "Button|Pick a button, then the action it should perform.",
+    "h.btn.reset": "Reset all buttons|Puts every button back to its factory action.",
+    "act.left": "LEFT CLICK",
+    "act.right": "RIGHT CLICK",
+    "act.middle": "MIDDLE CLICK",
+    "act.back": "BACK",
+    "act.fwd": "FORWARD",
+    "act.dpiUp": "DPI UP",
+    "act.dpiDown": "DPI DOWN",
+    "act.dpiCycle": "DPI CYCLE",
+    "act.scrollUp": "SCROLL UP",
+    "act.scrollDown": "SCROLL DOWN",
+    "act.none": "DISABLED",
+    "power.battery": "BATTERY",
+    "power.charging": "CHARGING",
+    "power.sleep": "SLEEP AFTER",
+    "power.low": "LOW POWER MODE AT",
+    "min": "MIN",
+    "h.power.sleep": "Sleep|Minutes of inactivity before the mouse sleeps.",
+    "h.power.low": "Low power mode|Battery level at which the mouse saves power. OFF disables it.",
+    "dongle.name": "DONGLE",
+    "dongle.status": "STATUS",
+    "dongle.paired": "PAIRED",
+    "dongle.mouse": "PAIRED MOUSE",
+    "dongle.max": "MAX POLLING",
+    "dongle.note": "THE HYPERPOLLING DONGLE ENABLES 2000-8000 HZ\nWIRELESS POLLING FOR THIS MOUSE.",
+    "dev.link": "CONNECTION",
+    "mouse.demoNote": "DEMO: SETTINGS ARE SIMULATED UNTIL THIS\nMOUSE'S PROTOCOL HAS BEEN CAPTURED.",
   },
   es: {
     "boot.init": "INICIANDO SISTEMA", "boot.assets": "CARGANDO RECURSOS", "boot.hw": "COMPROBANDO HARDWARE",
@@ -395,6 +492,76 @@ const I18N = {
     "h.kb.resetKeysets": "Borrar grupos|Elimina todos los grupos de esta página; todas las teclas vuelven al valor global.",
     "h.kb.resetLayer": "Restablecer capa|Devuelve todas las teclas de esta capa a su salida de fábrica.",
     "h.help": "Ayuda|Muestra qué hace el elemento elegido.", "h.lang": "Idioma|Cambia el idioma de la interfaz.",
+    "dev.keyboards": "TECLADOS",
+    "dev.mice": "RATONES",
+    "st.mouseConnected": "CONECTADO",
+    "st.btnMapped": "{b} -> {a}",
+    "tab.dpi": "DPI",
+    "tab.poll": "SONDEO",
+    "tab.sensor": "SENSOR",
+    "tab.buttons": "BOTONES",
+    "tab.power": "ENERGÍA",
+    "tab.dongle": "RECEPTOR",
+    "tab.madv": "AVANZADO",
+    "h.tab.dpi": "DPI|Niveles de sensibilidad. El botón DPI del ratón los recorre.",
+    "h.tab.poll": "Sondeo|Con qué frecuencia el ratón informa al PC.",
+    "h.tab.sensor": "Sensor|Distancia de levantamiento y motion sync.",
+    "h.tab.buttons": "Botones|Cambia lo que hace cada botón del ratón.",
+    "h.tab.power": "Energía|Batería, temporizador de reposo y modo de bajo consumo.",
+    "h.tab.dongle": "Receptor|El receptor inalámbrico con el que está emparejado este ratón.",
+    "h.tab.madv": "Avanzado|Información del dispositivo y compartir perfiles.",
+    "dpi.count": "NIVELES DE DPI",
+    "dpi.active": "NIVEL ACTIVO",
+    "dpi.step": "PASO DE DPI",
+    "dpi.stage": "NIVEL {n}",
+    "h.dpi.count": "Niveles de DPI|Cuántos niveles recorre el botón DPI.",
+    "h.dpi.active": "Nivel activo|El nivel que usa el ratón ahora.",
+    "h.dpi.step": "Paso de DPI|Cuánto cambia un nivel con cada < o >.",
+    "h.dpi.stage": "Nivel|Sensibilidad de este nivel en DPI (puntos por pulgada).",
+    "h.mpoll": "Tasa de sondeo|Con qué frecuencia el ratón informa su movimiento. Más alto es más suave pero gasta más batería y CPU.",
+    "mpoll.note": "DISPONIBLE EN ESTA CONEXIÓN: {list} HZ",
+    "sensor.lod": "DISTANCIA DE LEVANTAMIENTO",
+    "sensor.ms": "MOTION SYNC",
+    "h.sensor.lod": "Distancia de levantamiento|A qué altura se puede levantar el ratón antes de que el sensor deje de seguir.",
+    "h.sensor.ms": "Motion sync|Alinea las lecturas del sensor con el sondeo para un seguimiento más estable, con una latencia mínima extra.",
+    "btn.left": "IZQUIERDO",
+    "btn.right": "DERECHO",
+    "btn.middle": "CLIC DE RUEDA",
+    "btn.back": "LATERAL ATRÁS",
+    "btn.fwd": "LATERAL ADELANTE",
+    "btn.wheelUp": "RUEDA ARRIBA",
+    "btn.wheelDown": "RUEDA ABAJO",
+    "btn.select": "> ELIGE UN BOTÓN ARRIBA O EN EL RATÓN",
+    "btn.pick": "> {b}: ELIGE UNA ACCIÓN",
+    "btn.reset": "RESTABLECER BOTONES",
+    "h.btn": "Botón|Elige un botón y luego la acción que debe hacer.",
+    "h.btn.reset": "Restablecer botones|Devuelve todos los botones a su acción de fábrica.",
+    "act.left": "CLIC IZQUIERDO",
+    "act.right": "CLIC DERECHO",
+    "act.middle": "CLIC CENTRAL",
+    "act.back": "ATRÁS",
+    "act.fwd": "ADELANTE",
+    "act.dpiUp": "SUBIR DPI",
+    "act.dpiDown": "BAJAR DPI",
+    "act.dpiCycle": "CICLO DPI",
+    "act.scrollUp": "DESPLAZAR ARRIBA",
+    "act.scrollDown": "DESPLAZAR ABAJO",
+    "act.none": "DESACTIVADO",
+    "power.battery": "BATERÍA",
+    "power.charging": "CARGANDO",
+    "power.sleep": "REPOSO TRAS",
+    "power.low": "BAJO CONSUMO AL",
+    "min": "MIN",
+    "h.power.sleep": "Reposo|Minutos de inactividad antes de que el ratón entre en reposo.",
+    "h.power.low": "Bajo consumo|Nivel de batería en el que el ratón ahorra energía. NO lo desactiva.",
+    "dongle.name": "RECEPTOR",
+    "dongle.status": "ESTADO",
+    "dongle.paired": "EMPAREJADO",
+    "dongle.mouse": "RATÓN EMPAREJADO",
+    "dongle.max": "SONDEO MÁXIMO",
+    "dongle.note": "EL RECEPTOR HYPERPOLLING PERMITE SONDEO\nINALÁMBRICO DE 2000-8000 HZ PARA ESTE RATÓN.",
+    "dev.link": "CONEXIÓN",
+    "mouse.demoNote": "DEMO: LOS AJUSTES SON SIMULADOS HASTA\nCAPTURAR EL PROTOCOLO DE ESTE RATÓN.",
   },
   pt: {
     "boot.init": "INICIALIZANDO SISTEMA", "boot.assets": "CARREGANDO RECURSOS", "boot.hw": "VERIFICANDO HARDWARE",
@@ -499,6 +666,76 @@ const I18N = {
     "h.kb.resetKeysets": "Limpar grupos|Remove todos os grupos desta página; as teclas voltam ao valor global.",
     "h.kb.resetLayer": "Redefinir camada|Volta todas as teclas desta camada para a saída de fábrica.",
     "h.help": "Ajuda|Mostra o que o elemento escolhido faz.", "h.lang": "Idioma|Muda o idioma da interface.",
+    "dev.keyboards": "TECLADOS",
+    "dev.mice": "MOUSES",
+    "st.mouseConnected": "CONECTADO",
+    "st.btnMapped": "{b} -> {a}",
+    "tab.dpi": "DPI",
+    "tab.poll": "POLLING",
+    "tab.sensor": "SENSOR",
+    "tab.buttons": "BOTÕES",
+    "tab.power": "ENERGIA",
+    "tab.dongle": "DONGLE",
+    "tab.madv": "AVANÇADO",
+    "h.tab.dpi": "DPI|Níveis de sensibilidade. O botão de DPI do mouse alterna entre eles.",
+    "h.tab.poll": "Polling|Com que frequência o mouse informa o PC.",
+    "h.tab.sensor": "Sensor|Distância de levantamento e motion sync.",
+    "h.tab.buttons": "Botões|Mude o que cada botão do mouse faz.",
+    "h.tab.power": "Energia|Bateria, tempo para dormir e modo de economia.",
+    "h.tab.dongle": "Dongle|O receptor sem fio pareado com este mouse.",
+    "h.tab.madv": "Avançado|Informações do dispositivo e compartilhamento de perfis.",
+    "dpi.count": "NÍVEIS DE DPI",
+    "dpi.active": "NÍVEL ATIVO",
+    "dpi.step": "PASSO DE DPI",
+    "dpi.stage": "NÍVEL {n}",
+    "h.dpi.count": "Níveis de DPI|Quantos níveis o botão de DPI percorre.",
+    "h.dpi.active": "Nível ativo|O nível que o mouse está usando agora.",
+    "h.dpi.step": "Passo de DPI|Quanto cada < ou > muda um nível.",
+    "h.dpi.stage": "Nível|Sensibilidade deste nível em DPI (pontos por polegada).",
+    "h.mpoll": "Taxa de polling|Com que frequência o mouse informa o movimento. Mais alto é mais suave, mas gasta mais bateria e CPU.",
+    "mpoll.note": "DISPONÍVEL NESTA CONEXÃO: {list} HZ",
+    "sensor.lod": "DISTÂNCIA DE LEVANTAMENTO",
+    "sensor.ms": "MOTION SYNC",
+    "h.sensor.lod": "Distância de levantamento|Quanto o mouse pode ser levantado antes de o sensor parar de rastrear.",
+    "h.sensor.ms": "Motion sync|Alinha as leituras do sensor com o polling para um rastreio mais estável, com latência extra mínima.",
+    "btn.left": "ESQUERDO",
+    "btn.right": "DIREITO",
+    "btn.middle": "CLIQUE DA RODA",
+    "btn.back": "LATERAL VOLTAR",
+    "btn.fwd": "LATERAL AVANÇAR",
+    "btn.wheelUp": "RODA PARA CIMA",
+    "btn.wheelDown": "RODA PARA BAIXO",
+    "btn.select": "> ESCOLHA UM BOTÃO ACIMA OU NO MOUSE",
+    "btn.pick": "> {b}: ESCOLHA UMA AÇÃO",
+    "btn.reset": "REDEFINIR BOTÕES",
+    "h.btn": "Botão|Escolha um botão e depois a ação que ele deve fazer.",
+    "h.btn.reset": "Redefinir botões|Volta todos os botões para a ação de fábrica.",
+    "act.left": "CLIQUE ESQUERDO",
+    "act.right": "CLIQUE DIREITO",
+    "act.middle": "CLIQUE DO MEIO",
+    "act.back": "VOLTAR",
+    "act.fwd": "AVANÇAR",
+    "act.dpiUp": "AUMENTAR DPI",
+    "act.dpiDown": "DIMINUIR DPI",
+    "act.dpiCycle": "ALTERNAR DPI",
+    "act.scrollUp": "ROLAR PARA CIMA",
+    "act.scrollDown": "ROLAR PARA BAIXO",
+    "act.none": "DESATIVADO",
+    "power.battery": "BATERIA",
+    "power.charging": "CARREGANDO",
+    "power.sleep": "DORMIR APÓS",
+    "power.low": "ECONOMIA EM",
+    "min": "MIN",
+    "h.power.sleep": "Dormir|Minutos sem uso antes de o mouse dormir.",
+    "h.power.low": "Modo de economia|Nível de bateria em que o mouse economiza energia. DESL desativa.",
+    "dongle.name": "DONGLE",
+    "dongle.status": "STATUS",
+    "dongle.paired": "PAREADO",
+    "dongle.mouse": "MOUSE PAREADO",
+    "dongle.max": "POLLING MÁXIMO",
+    "dongle.note": "O DONGLE HYPERPOLLING LIBERA POLLING SEM FIO\nDE 2000-8000 HZ PARA ESTE MOUSE.",
+    "dev.link": "CONEXÃO",
+    "mouse.demoNote": "DEMO: AS CONFIGURAÇÕES SÃO SIMULADAS ATÉ\nCAPTURARMOS O PROTOCOLO DESTE MOUSE.",
   },
   zh: {
     "boot.init": "系统初始化", "boot.assets": "加载资源", "boot.hw": "检测硬件", "boot.conn": "建立连接", "boot.ready": "就绪", "boot.pct": "已完成 {n}%",
@@ -569,6 +806,76 @@ const I18N = {
     "h.share.export": "导出|复制包含此配置全部设置的文本代码，可粘贴分享或备份。", "h.share.import": "导入|先在下方粘贴配置代码，再点击导入。会立即写入设备。",
     "h.kb.resetKeysets": "清除按键组|删除此页面所有按键组，所有按键恢复全局数值。", "h.kb.resetLayer": "重置此层|将此层所有按键恢复为出厂输出。",
     "h.help": "帮助|显示所选元素的作用。", "h.lang": "语言|切换界面语言。",
+    "dev.keyboards": "键盘",
+    "dev.mice": "鼠标",
+    "st.mouseConnected": "已连接",
+    "st.btnMapped": "{b} -> {a}",
+    "tab.dpi": "DPI",
+    "tab.poll": "回报率",
+    "tab.sensor": "传感器",
+    "tab.buttons": "按键",
+    "tab.power": "电源",
+    "tab.dongle": "接收器",
+    "tab.madv": "高级",
+    "h.tab.dpi": "DPI|灵敏度档位，鼠标上的 DPI 键会循环切换。",
+    "h.tab.poll": "回报率|鼠标向电脑报告的频率。",
+    "h.tab.sensor": "传感器|静默高度和 MOTION SYNC。",
+    "h.tab.buttons": "按键|修改鼠标每个按键的功能。",
+    "h.tab.power": "电源|电量、休眠时间和省电模式。",
+    "h.tab.dongle": "接收器|与此鼠标配对的无线接收器。",
+    "h.tab.madv": "高级|设备信息和配置分享。",
+    "dpi.count": "DPI 档位数",
+    "dpi.active": "当前档位",
+    "dpi.step": "DPI 步进",
+    "dpi.stage": "档位 {n}",
+    "h.dpi.count": "DPI 档位数|DPI 键循环的档位数量。",
+    "h.dpi.active": "当前档位|鼠标当前使用的档位。",
+    "h.dpi.step": "DPI 步进|每次按 < 或 > 改变的数值。",
+    "h.dpi.stage": "档位|此档位的灵敏度（DPI）。",
+    "h.mpoll": "回报率|鼠标报告移动的频率。越高越流畅，但更耗电和 CPU。",
+    "mpoll.note": "此连接可用：{list} HZ",
+    "sensor.lod": "静默高度",
+    "sensor.ms": "MOTION SYNC",
+    "h.sensor.lod": "静默高度|鼠标抬起多高后传感器停止追踪。",
+    "h.sensor.ms": "MOTION SYNC|让传感器读取与回报间隔同步，追踪更稳定，延迟略有增加。",
+    "btn.left": "左键",
+    "btn.right": "右键",
+    "btn.middle": "滚轮按下",
+    "btn.back": "侧键后",
+    "btn.fwd": "侧键前",
+    "btn.wheelUp": "滚轮上",
+    "btn.wheelDown": "滚轮下",
+    "btn.select": "> 在上方或鼠标图上选择一个按键",
+    "btn.pick": "> {b}：选择功能",
+    "btn.reset": "重置所有按键",
+    "h.btn": "按键|先选择按键，再选择它的功能。",
+    "h.btn.reset": "重置所有按键|将所有按键恢复为出厂功能。",
+    "act.left": "左键单击",
+    "act.right": "右键单击",
+    "act.middle": "中键单击",
+    "act.back": "后退",
+    "act.fwd": "前进",
+    "act.dpiUp": "DPI 增加",
+    "act.dpiDown": "DPI 减少",
+    "act.dpiCycle": "DPI 循环",
+    "act.scrollUp": "向上滚动",
+    "act.scrollDown": "向下滚动",
+    "act.none": "禁用",
+    "power.battery": "电量",
+    "power.charging": "充电中",
+    "power.sleep": "休眠时间",
+    "power.low": "省电模式阈值",
+    "min": "分钟",
+    "h.power.sleep": "休眠|无操作多少分钟后鼠标休眠。",
+    "h.power.low": "省电模式|电量低于此值时鼠标进入省电。关表示禁用。",
+    "dongle.name": "接收器",
+    "dongle.status": "状态",
+    "dongle.paired": "已配对",
+    "dongle.mouse": "配对鼠标",
+    "dongle.max": "最高回报率",
+    "dongle.note": "HYPERPOLLING 接收器可为此鼠标\n提供 2000-8000 HZ 无线回报率。",
+    "dev.link": "连接方式",
+    "mouse.demoNote": "演示：在捕获此鼠标的协议之前，\n所有设置均为模拟。",
   },
   ja: {
     "boot.init": "システム初期化中", "boot.assets": "アセット読み込み中", "boot.hw": "ハードウェア確認中", "boot.conn": "接続を確立中", "boot.ready": "準備完了", "boot.pct": "{n}% 完了",
@@ -645,6 +952,76 @@ const I18N = {
     "h.share.export": "エクスポート|このプロファイルの全設定をテキストコードでコピー。共有やバックアップに。", "h.share.import": "インポート|下にコードを貼り付けてからインポートを押すと、すぐデバイスに書き込まれます。",
     "h.kb.resetKeysets": "キーセットをリセット|このページのキーセットをすべて削除し、全体の値に戻します。", "h.kb.resetLayer": "レイヤーをリセット|このレイヤーの全キーを工場出荷時の出力に戻します。",
     "h.help": "ヘルプ|選択した要素の説明を表示します。", "h.lang": "言語|表示言語を切り替えます。",
+    "dev.keyboards": "キーボード",
+    "dev.mice": "マウス",
+    "st.mouseConnected": "接続済み",
+    "st.btnMapped": "{b} -> {a}",
+    "tab.dpi": "DPI",
+    "tab.poll": "ポーリング",
+    "tab.sensor": "センサー",
+    "tab.buttons": "ボタン",
+    "tab.power": "電源",
+    "tab.dongle": "ドングル",
+    "tab.madv": "詳細設定",
+    "h.tab.dpi": "DPI|感度ステージ。マウスの DPI ボタンで順に切り替わります。",
+    "h.tab.poll": "ポーリング|マウスが PC に報告する頻度。",
+    "h.tab.sensor": "センサー|リフトオフ距離と MOTION SYNC。",
+    "h.tab.buttons": "ボタン|各マウスボタンの動作を変更します。",
+    "h.tab.power": "電源|バッテリー、スリープ時間、省電力モード。",
+    "h.tab.dongle": "ドングル|このマウスとペアリングされた無線レシーバー。",
+    "h.tab.madv": "詳細設定|デバイス情報とプロファイル共有。",
+    "dpi.count": "DPI ステージ数",
+    "dpi.active": "使用中のステージ",
+    "dpi.step": "DPI ステップ",
+    "dpi.stage": "ステージ {n}",
+    "h.dpi.count": "DPI ステージ数|DPI ボタンで切り替わるステージの数。",
+    "h.dpi.active": "使用中のステージ|現在マウスが使っているステージ。",
+    "h.dpi.step": "DPI ステップ|< や > で変わる量。",
+    "h.dpi.stage": "ステージ|このステージの感度（DPI）。",
+    "h.mpoll": "ポーリングレート|マウスが動きを報告する頻度。高いほど滑らかですがバッテリーと CPU を多く使います。",
+    "mpoll.note": "この接続で使用可能：{list} HZ",
+    "sensor.lod": "リフトオフ距離",
+    "sensor.ms": "MOTION SYNC",
+    "h.sensor.lod": "リフトオフ距離|センサーが追跡をやめるまでにマウスを持ち上げられる高さ。",
+    "h.sensor.ms": "MOTION SYNC|センサーの読み取りをポーリング間隔に合わせ、わずかな遅延と引き換えに追跡を安定させます。",
+    "btn.left": "左ボタン",
+    "btn.right": "右ボタン",
+    "btn.middle": "ホイールクリック",
+    "btn.back": "サイド（戻る）",
+    "btn.fwd": "サイド（進む）",
+    "btn.wheelUp": "ホイール上",
+    "btn.wheelDown": "ホイール下",
+    "btn.select": "> 上またはマウス図でボタンを選択",
+    "btn.pick": "> {b}：動作を選択",
+    "btn.reset": "全ボタンをリセット",
+    "h.btn": "ボタン|ボタンを選び、次に動作を選びます。",
+    "h.btn.reset": "全ボタンをリセット|すべてのボタンを工場出荷時の動作に戻します。",
+    "act.left": "左クリック",
+    "act.right": "右クリック",
+    "act.middle": "中クリック",
+    "act.back": "戻る",
+    "act.fwd": "進む",
+    "act.dpiUp": "DPI アップ",
+    "act.dpiDown": "DPI ダウン",
+    "act.dpiCycle": "DPI 切替",
+    "act.scrollUp": "上スクロール",
+    "act.scrollDown": "下スクロール",
+    "act.none": "無効",
+    "power.battery": "バッテリー",
+    "power.charging": "充電中",
+    "power.sleep": "スリープまで",
+    "power.low": "省電力モード開始",
+    "min": "分",
+    "h.power.sleep": "スリープ|操作がない状態でスリープするまでの分数。",
+    "h.power.low": "省電力モード|このバッテリー残量で省電力になります。オフで無効。",
+    "dongle.name": "ドングル",
+    "dongle.status": "状態",
+    "dongle.paired": "ペアリング済み",
+    "dongle.mouse": "ペアリングしたマウス",
+    "dongle.max": "最大ポーリング",
+    "dongle.note": "HYPERPOLLING ドングルでこのマウスの\n無線ポーリングを 2000-8000 HZ にできます。",
+    "dev.link": "接続方式",
+    "mouse.demoNote": "デモ：このマウスのプロトコルを取得するまで\n設定はシミュレーションです。",
   },
 };
 const LANGS = [["en", "EN"], ["es", "ES"], ["pt", "PT"], ["zh", "中文"], ["ja", "日本語"]];
@@ -1050,6 +1427,7 @@ function changed(...what) {
   if (what.includes("act")) debounce("act", syncActuation);
   if (what.includes("keys")) debounce("keys", syncKeyTables, 500);
   if (what.includes("light")) debounce("light", syncLighting, 250);
+  if (what.includes("mouse")) debounce("mouse", syncMouse, 250);
 }
 
 let busy = Promise.resolve();
@@ -1092,14 +1470,53 @@ function persistModel() {
   saveProfiles(PROFILES);
 }
 
+/* ===================== mice ===================== */
+// Specs of each supported mouse. Values are what the official software offers.
+const RAZER_DAV3PRO = {
+  model: "DEATHADDER V3 PRO", dpiMin: 100, dpiMax: 30000, stagesMax: 5, polling: [125, 500, 1000],
+  link: "HYPERSPEED WIRELESS", usb: "1532:00B7", foot: "DEATHADDER V3 PRO · FOCUS PRO 30K · 5 BUTTONS · 63 G",
+  buttons: ["left", "right", "middle", "back", "fwd", "wheelUp", "wheelDown"],
+};
+const RAZER_DAV3PRO_HP = { ...RAZER_DAV3PRO, polling: [125, 500, 1000, 2000, 4000, 8000], link: "HYPERPOLLING WIRELESS", usb: "-",
+  dongle: { name: "RAZER HYPERPOLLING WIRELESS DONGLE", maxPolling: 8000 } };
+const MOUSE_ACTIONS = ["left", "right", "middle", "back", "fwd", "dpiUp", "dpiDown", "dpiCycle", "scrollUp", "scrollDown", "none"];
+const BUTTON_DEFAULT = { left: "left", right: "right", middle: "middle", back: "back", fwd: "fwd", wheelUp: "scrollUp", wheelDown: "scrollDown" };
+const defaultMouseModel = (spec) => ({
+  dpi: { stages: [400, 800, 1600, 3200, 6400].slice(0, spec.stagesMax), count: 5, active: 1 },
+  polling: spec.polling[spec.polling.length - 1] >= 1000 ? 1000 : spec.polling[spec.polling.length - 1],
+  lod: 2, motionSync: false, buttons: { ...BUTTON_DEFAULT }, sleep: 5, lowPower: 15,
+});
+
+// Simulated mouse: same interface a real driver will have once the protocol is captured.
+class DemoMouse {
+  constructor(spec) {
+    this.spec = spec;
+    this.name = `RAZER ${spec.model} (DEMO)`;
+    this.demo = true;
+  }
+  async open() {}
+  async close() {}
+  async info() { return { firmware: "DEMO", battery: 76, charging: false }; }
+  async apply() { return true; }
+}
+
 /* ===================== devices ===================== */
 // Every supported device: how to recognise it, how to talk to it, and its demo. New devices are added here.
 const DEVICE_TYPES = [
-  { id: "mu68", name: "IYX MU68", filter: { vendorId: VID, productId: PID, usagePage: USAGE_PAGE, usage: USAGE },
+  { id: "mu68", kind: "keyboard", name: "IYX MU68", filter: { vendorId: VID, productId: PID, usagePage: USAGE_PAGE, usage: USAGE },
     pages: ["act", "rt", "map", "light", "switch", "adv"],
     driver: (d) => Object.assign(new Mu68(d), { type: "mu68" }), demo: () => Object.assign(new DemoMu68(), { type: "mu68" }) },
+  // Razer DeathAdder V3 Pro: demo only until its protocol is captured (USB 1532:00B7 on the HyperSpeed dongle).
+  { id: "dav3pro", kind: "mouse", name: "RAZER DEATHADDER V3 PRO", filter: null, mouse: RAZER_DAV3PRO,
+    pages: ["dpi", "poll", "sensor", "buttons", "power", "madv"],
+    demo: () => Object.assign(new DemoMouse(RAZER_DAV3PRO), { type: "dav3pro" }) },
+  { id: "dav3pro-hp", kind: "mouse", name: "RAZER DEATHADDER V3 PRO + HYPERPOLLING", filter: null, mouse: RAZER_DAV3PRO_HP,
+    pages: ["dpi", "poll", "sensor", "buttons", "power", "dongle", "madv"],
+    demo: () => Object.assign(new DemoMouse(RAZER_DAV3PRO_HP), { type: "dav3pro-hp" }) },
 ];
-const deviceTypeOf = (d) => DEVICE_TYPES.find(({ filter: f }) =>
+const typeOfDev = (dev) => dev && DEVICE_TYPES.find((d) => d.id === dev.type);
+const kindOf = (dev) => typeOfDev(dev)?.kind;
+const deviceTypeOf = (d) => DEVICE_TYPES.filter((x) => x.filter).find(({ filter: f }) =>
   d.vendorId === f.vendorId && d.productId === f.productId && d.collections.some((c) => c.usagePage === f.usagePage));
 const driverFor = (d) => deviceTypeOf(d).driver(d);
 async function refreshPaired() {
@@ -1109,7 +1526,8 @@ async function refreshPaired() {
 // The keyboard and its case only appear once a keyboard is connected and read; each appearance replays the draw-in.
 function syncKeyboardVisibility() {
   const area = $("kbArea");
-  const want = !!(S.dev && S.model) && !document.body.classList.contains("booting");
+  syncMouseVisibility();
+  const want = !!(S.dev && S.model) && kindOf(S.dev) === "keyboard" && !document.body.classList.contains("booting");
   if (!want) {
     if (area.classList.contains("hidden") || area.classList.contains("leaving")) return;
     // play the exit, then hide; a reconnect during the exit cancels it
@@ -1148,6 +1566,7 @@ async function connect(dev, onProgress) {
   PROFILES = loadProfiles(profileScope(dev));
   status("st.reading");
   render();
+  if (kindOf(dev) === "mouse") return connectMouse(dev, onProgress);
   S.info = await dev.info();
   S.polling = await dev.getPolling();
   S.board.clear();
@@ -1182,7 +1601,7 @@ async function disconnect() {
 async function pair() {
   if (!("hid" in navigator)) { status("st.noHid"); return; }
   try {
-    const devs = await navigator.hid.requestDevice({ filters: DEVICE_TYPES.map((d) => d.filter) });
+    const devs = await navigator.hid.requestDevice({ filters: DEVICE_TYPES.filter((d) => d.filter).map((d) => d.filter) });
     await refreshPaired();
     if (devs[0]) await connect(driverFor(devs[0]));
   } catch { status("st.pairCancel"); }
@@ -1314,7 +1733,7 @@ function renderDevices() {
   const box = $("devices");
   box.replaceChildren();
   if (S.dev) {
-    const fw = S.info ? fwVersion(S.info.ident) : "";
+    const fw = S.info ? (S.info.ident ? fwVersion(S.info.ident) : S.info.firmware || "") : "";
     box.append(el("div", { class: "line" },
       nav(el("button", { class: "opt", style: "display:inline", help: t("h.disconnect"), on: { click: disconnect } }, "[X]"), { activate: disconnect }),
       " ", el("span", { style: "color:var(--green)" }, "◆"), ` ${S.dev.name}${fw ? " - V" + fw : ""}`));
@@ -1335,9 +1754,12 @@ function renderDevices() {
   if ("hid" in navigator) box.append(nav(el("div", { class: "opt", help: t("h.pair"), on: { click: pair } }, "  " + t("dev.pair")), { activate: pair }));
   else box.append(textRow("  " + t("dev.noHid")));
   box.append(spacer(), textRow(t("dev.demo"), ""));
-  for (const type of DEVICE_TYPES) {
-    const demo = () => connect(type.demo());
-    box.append(nav(el("div", { class: "opt", help: t("h.demo"), on: { click: demo } }, `  > ${type.name}`), { activate: demo }));
+  for (const [kind, label] of [["keyboard", "dev.keyboards"], ["mouse", "dev.mice"]]) {
+    box.append(textRow("  " + t(label)));
+    for (const type of DEVICE_TYPES.filter((d) => d.kind === kind)) {
+      const demo = () => connect(type.demo());
+      box.append(nav(el("div", { class: "opt", help: t("h.demo"), on: { click: demo } }, `    > ${type.name}`), { activate: demo }));
+    }
   }
   box.append(textRow("  " + t("dev.more")));
 }
@@ -1345,7 +1767,7 @@ const fwVersion = (ident) => (ident.split(",")[5] || "").replace(/^V/, "").repla
 
 // Only the connected device's own pages are shown; nothing before a device is connected.
 function renderTabs() {
-  const type = S.dev && S.model && DEVICE_TYPES.find((d) => d.id === S.dev.type);
+  const type = S.model && typeOfDev(S.dev);
   const pages = type ? type.pages : [];
   if (pages.length && !pages.includes(S.tab)) S.tab = pages[0];
   const box = tabGroup(pages.map((id) => [id, t("tab." + id), t("h.tab." + id)]), S.tab, (id) => {
@@ -1377,7 +1799,8 @@ function renderView() {
   $("view").replaceChildren(rows);
   if (!S.dev) { rows.append(textRow(t("view.connect"))); return; }
   if (!S.model) { rows.append(textRow(t("kb.reading"))); return; }
-  ({ act: pageActuation, rt: pageRapid, map: pageMapping, light: pageLighting, switch: pageSwitches, adv: pageAdvanced })[S.tab](rows);
+  ({ act: pageActuation, rt: pageRapid, map: pageMapping, light: pageLighting, switch: pageSwitches, adv: pageAdvanced,
+     dpi: pageDpi, poll: pagePoll, sensor: pageSensor, buttons: pageButtons, power: pagePower, dongle: pageDongle, madv: pageMouseAdvanced })[S.tab](rows);
 }
 
 function stepSizeRow() {
@@ -1664,13 +2087,198 @@ function pageShare(rows) {
   rows.append(buttonRow(t("share.import", { n: PROFILES.cur + 1 }), t("share.importBtn"), () => {
     try {
       const data = JSON.parse(atob($("shareBox").value.trim().replace(/^(OPEN|IYX68):/, "")));
-      if (!data.model?.act || !data.model?.rt) throw new Error();
-      S.model = { ...defaultModel(), ...data.model };
+      const mouse = kindOf(S.dev) === "mouse";
+      if (mouse ? !data.model?.dpi : !data.model?.act || !data.model?.rt) throw new Error();
+      S.model = mouse ? { ...defaultMouseModel(typeOfDev(S.dev).mouse), ...data.model } : { ...defaultModel(), ...data.model };
       status("st.imported");
-      changed("act", "keys", "light");
+      if (mouse) changed("mouse"); else changed("act", "keys", "light");
     } catch { status("st.badCode"); }
   }, t("h.share.import")));
   rows.append(spacer(), nav(el("textarea", { id: "shareBox", placeholder: t("share.paste") })));
+}
+
+/* ===================== mice: pages and view ===================== */
+async function connectMouse(dev, onProgress) {
+  S.info = await dev.info();
+  onProgress?.(1);
+  const spec = typeOfDev(dev).mouse;
+  const stored = PROFILES.list[PROFILES.cur];
+  S.model = { ...defaultMouseModel(spec), ...(stored || {}) };
+  S.model.buttons = { ...BUTTON_DEFAULT, ...S.model.buttons };
+  persistModel();
+  status("st.mouseConnected");
+  render();
+  return true;
+}
+const syncMouse = () => exclusive(async () => {
+  if (!S.dev || kindOf(S.dev) !== "mouse") return;
+  status((await S.dev.apply(S.model)) ? "st.saved" : "st.notConfirmed");
+});
+const mouseSpec = () => typeOfDev(S.dev).mouse;
+const DPI_STEPS = [50, 100, 500, 1000];
+
+function pageDpi(rows) {
+  const d = S.model.dpi, spec = mouseSpec();
+  S.dpiStep ??= 50;
+  rows.append(stepRow(t("dpi.count"), String(d.count), (x) => { d.count = clamp(d.count + x, 1, spec.stagesMax); d.active = Math.min(d.active, d.count - 1); changed("mouse"); }, t("h.dpi.count")));
+  rows.append(stepRow(t("dpi.active"), String(d.active + 1), (x) => { d.active = clamp(d.active + x, 0, d.count - 1); changed("mouse"); }, t("h.dpi.active")));
+  rows.append(stepRow(t("dpi.step"), `${S.dpiStep} DPI`, (x) => { S.dpiStep = DPI_STEPS[clamp(DPI_STEPS.indexOf(S.dpiStep) + x, 0, DPI_STEPS.length - 1)]; render(); }, t("h.dpi.step")));
+  rows.append(spacer());
+  for (let i = 0; i < d.count; i++) {
+    const label = (i === d.active ? "> " : "  ") + t("dpi.stage", { n: i + 1 });
+    rows.append(stepRow(label, `${d.stages[i]} DPI`, (x) => {
+      d.stages[i] = clamp(d.stages[i] + x * S.dpiStep, spec.dpiMin, spec.dpiMax); changed("mouse");
+    }, t("h.dpi.stage")));
+  }
+}
+
+function pagePoll(rows) {
+  const opts = mouseSpec().polling;
+  rows.append(stepRow(t("adv.polling"), `${S.model.polling} HZ`, (x) => {
+    S.model.polling = opts[clamp(opts.indexOf(S.model.polling) + x, 0, opts.length - 1)]; changed("mouse");
+  }, t("h.mpoll")));
+  rows.append(spacer(), textRow(t("mpoll.note", { list: opts.join(" / ") })));
+}
+
+function pageSensor(rows) {
+  const m = S.model;
+  rows.append(stepRow(t("sensor.lod"), `${m.lod}.00 MM`, (x) => { m.lod = clamp(m.lod + x, 1, 3); changed("mouse"); }, t("h.sensor.lod")));
+  rows.append(stepRow(t("sensor.ms"), onOff(m.motionSync), () => { m.motionSync = !m.motionSync; changed("mouse"); }, t("h.sensor.ms")));
+}
+
+function pageButtons(rows) {
+  const spec = mouseSpec();
+  rows.append(el("div", { class: "subtabs" }, ...spec.buttons.map((b, i) => {
+    const pick = () => { S.mouseSel = b; render(); };
+    return nav(el("button", { class: "tab" + (S.mouseSel === b ? " on" : ""), help: t("h.btn"), on: { click: pick } }, t("btn." + b)),
+      { activate: pick, step: (x) => { S.mouseSel = spec.buttons[clamp(i + x, 0, spec.buttons.length - 1)]; render(); } });
+  })));
+  if (!S.mouseSel) { rows.append(textRow(t("btn.select"))); return; }
+  rows.append(textRow(t("btn.pick", { b: t("btn." + S.mouseSel) }), ""), spacer());
+  const box = el("div", { class: "chipbox", style: "max-width:500px" });
+  MOUSE_ACTIONS.forEach((a, i) => {
+    const pick = () => { S.model.buttons[S.mouseSel] = a; status("st.btnMapped", { b: t("btn." + S.mouseSel), a: t("act." + a) }); changed("mouse"); };
+    box.append(nav(el("span", { class: "chip" + (S.model.buttons[S.mouseSel] === a ? " on" : ""), on: { click: pick } }, t("act." + a)),
+      { activate: pick, step: (x) => box.children[clamp(i + x, 0, MOUSE_ACTIONS.length - 1)]?.focus() }));
+  });
+  rows.append(box, spacer());
+  rows.append(buttonRow(t("btn.reset"), t("select"), () => { S.model.buttons = { ...BUTTON_DEFAULT }; changed("mouse"); }, t("h.btn.reset")));
+}
+
+function pagePower(rows) {
+  const m = S.model;
+  const info = (a, b) => nav(el("div", { class: "opt", style: "cursor:default" }, dots(a) + " " + b));
+  rows.append(info(t("power.battery"), S.info?.battery != null ? `${S.info.battery}%${S.info.charging ? " · " + t("power.charging") : ""}` : "?"));
+  rows.append(stepRow(t("power.sleep"), `${m.sleep} ${t("min")}`, (x) => { m.sleep = clamp(m.sleep + x, 1, 15); changed("mouse"); }, t("h.power.sleep")));
+  rows.append(stepRow(t("power.low"), m.lowPower ? `${m.lowPower}%` : t("off"), (x) => { m.lowPower = clamp(m.lowPower + x * 5, 0, 100); changed("mouse"); }, t("h.power.low")));
+}
+
+function pageDongle(rows) {
+  const spec = mouseSpec();
+  const info = (a, b) => nav(el("div", { class: "opt", style: "cursor:default" }, dots(a, 26) + " " + b));
+  rows.append(info(t("dongle.name"), spec.dongle.name));
+  rows.append(info(t("dongle.status"), S.dev.demo ? t("dongle.paired") + " (DEMO)" : t("dongle.paired")));
+  rows.append(info(t("dongle.mouse"), "RAZER " + spec.model));
+  rows.append(info(t("dongle.max"), `${spec.dongle.maxPolling} HZ`));
+  rows.append(spacer(), textRow(t("dongle.note")));
+}
+
+function pageMouseAdvanced(rows) {
+  rows.append(tabGroup([["device", t("adv.device")], ["share", t("adv.share")]], S.sub === "share" ? "share" : "device",
+    (id) => { S.sub = id; render(); }, "subtabs"));
+  if (S.sub === "share") { pageShare(rows); return; }
+  const spec = mouseSpec();
+  const line = (a, b) => nav(el("div", { class: "opt", style: "cursor:default" }, dots(a, 26) + " " + b));
+  rows.append(line(t("dev.name"), S.dev.name));
+  rows.append(line(t("dev.fw"), S.info?.firmware || "?"));
+  rows.append(line(t("dev.link"), spec.link));
+  rows.append(line(t("dev.usb"), spec.usb));
+  if (S.dev.demo) rows.append(spacer(), textRow(t("mouse.demoNote")));
+}
+
+// Top-down outline of a right-handed ergonomic mouse, in millimetres (DeathAdder V3: 128 x 68 mm).
+const MOUSE_SHAPE = {
+  w: 68, h: 128,
+  outline: "M34,2 C48,2 58,6 61,16 C64,30 66,52 67,72 C68,92 64,112 54,121 C47,127 38,128 31,127 C18,125 8,117 5,104 " +
+    "C2,92 4,82 6,72 C7,64 4,56 4,46 C4,30 6,14 14,7 C19,3 27,2 34,2 Z",
+  split: "M34,2 L33.5,53",
+  buttonsEdge: "M4.5,50 Q34,57 65.7,50",
+  zones: {
+    left: "M34,2 C27,2 19,3 14,7 C6,14 4,30 4,46 L4.5,50 Q19,54.5 33.5,54.4 Z",
+    right: "M34,2 C48,2 58,6 61,16 C63.5,27 65,40 65.7,50 Q50,54.5 33.5,54.4 Z",
+    middle: "M31,12 Q31,9 34,9 Q37,9 37,12 L37,28 Q37,31 34,31 Q31,31 31,28 Z",
+    fwd: "M6.5,58 L10,58 L10,68 L6.5,68 Z",
+    back: "M6.5,71 L10,71 L10,81 L6.5,81 Z",
+  },
+  labels: { left: [18, 40], right: [50, 40], middle: [34, -2], fwd: [-14, 64], back: [-14, 77] },
+};
+const MOUSE_SCALE = 3.4;  // screen px per mm
+
+function buildMouse() {
+  const svg = $("mouseSvg");
+  svg.replaceChildren();
+  const s = MOUSE_SCALE, NS = "http://www.w3.org/2000/svg";
+  svg.setAttribute("viewBox", `-40 -8 ${MOUSE_SHAPE.w + 80} ${MOUSE_SHAPE.h + 12}`);
+  svg.setAttribute("width", (MOUSE_SHAPE.w + 80) * s);
+  svg.setAttribute("height", (MOUSE_SHAPE.h + 12) * s);
+  const add = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); svg.append(n); return n; };
+  for (const [id, d] of Object.entries(MOUSE_SHAPE.zones)) {
+    const z = add("path", { d, class: "zone", "data-btn": id });
+    z.addEventListener("click", () => { if (S.dev) { S.tab = "buttons"; S.mouseSel = id; render(); } });
+  }
+  const line = (d, cls) => add("path", { d, class: cls, pathLength: 1, "stroke-width": 1 / s, "vector-effect": "none" });
+  line(MOUSE_SHAPE.outline, "edge");
+  line(MOUSE_SHAPE.split, "edge");
+  line(MOUSE_SHAPE.buttonsEdge, "soft");
+  for (const id of ["middle", "fwd", "back"]) line(MOUSE_SHAPE.zones[id], "edge");
+  for (const [id, [x, y]] of Object.entries(MOUSE_SHAPE.labels)) {
+    const tx = add("text", { x, y, class: "lbl", "data-lbl": id, "font-size": 11 / s });
+    tx.style.fontSize = 11 / s + "px";
+  }
+}
+
+function renderMouse() {
+  if (kindOf(S.dev) !== "mouse" || !S.model) return;
+  const b = S.model.buttons;
+  for (const z of document.querySelectorAll("#mouseSvg .zone")) z.classList.toggle("sel", S.tab === "buttons" && S.mouseSel === z.dataset.btn);
+  for (const tx of document.querySelectorAll("#mouseSvg .lbl")) {
+    const id = tx.dataset.lbl;
+    tx.textContent = t("act." + b[id]);
+    tx.classList.toggle("custom", b[id] !== BUTTON_DEFAULT[id]);
+  }
+  const d = S.model.dpi;
+  $("mousePrompt").textContent = `> ${d.stages[d.active]} DPI · ${S.model.polling} HZ`;
+  $("mousefoot").textContent = mouseSpec().foot;
+}
+
+// The connected mouse is the one in your hand, so real clicks light up the matching button.
+const BUTTON_OF_EVENT = { 0: "left", 1: "middle", 2: "right", 3: "back", 4: "fwd" };
+function flashButton(id, on) {
+  if (kindOf(S.dev) !== "mouse") return;
+  document.querySelector(`#mouseSvg .zone[data-btn="${id}"]`)?.classList.toggle("down", on);
+}
+addEventListener("mousedown", (e) => flashButton(BUTTON_OF_EVENT[e.button], true));
+addEventListener("mouseup", (e) => flashButton(BUTTON_OF_EVENT[e.button], false));
+addEventListener("wheel", () => { flashButton("middle", true); clearTimeout(S.wheelT); S.wheelT = setTimeout(() => flashButton("middle", false), 120); }, { passive: true });
+
+function syncMouseVisibility() {
+  const area = $("mouseArea");
+  const want = !!(S.dev && S.model) && kindOf(S.dev) === "mouse" && !document.body.classList.contains("booting");
+  if (!want) {
+    if (area.classList.contains("hidden") || area.classList.contains("leaving")) return;
+    area.classList.add("leaving");
+    $("mousecase").classList.remove("drawing");
+    clearTimeout(S.mouseLeaveTimer);
+    S.mouseLeaveTimer = setTimeout(() => { area.classList.remove("leaving"); area.classList.add("hidden"); }, 950);
+    return;
+  }
+  if (area.classList.contains("leaving")) { clearTimeout(S.mouseLeaveTimer); area.classList.remove("leaving"); area.classList.add("hidden"); }
+  if (!area.classList.contains("hidden")) return;
+  area.classList.remove("hidden");
+  for (const n of area.querySelectorAll(".fade")) { n.classList.remove("fade"); void n.offsetWidth; n.classList.add("fade"); }
+  const c = $("mousecase");
+  c.classList.remove("drawing"); void c.offsetWidth; c.classList.add("drawing");
+  setTimeout(() => c.classList.remove("drawing"), 1600);
 }
 
 /* ===================== keyboard + case ===================== */
@@ -1858,7 +2466,7 @@ async function switchProfile(d) {
   S.model = { ...defaultModel(), ...clone(PROFILES.list[PROFILES.cur]) };
   saveProfiles(PROFILES);
   status("st.profile", { n: PROFILES.cur + 1 });
-  changed("act", "keys", "light");
+  if (kindOf(S.dev) === "mouse") changed("mouse"); else changed("act", "keys", "light");
 }
 
 function onTravel(id, depth) {
@@ -1921,7 +2529,8 @@ function render() {
   renderDevices();
   renderTabs();
   renderView();
-  renderKeyboard();
+  if (kindOf(S.dev) !== "mouse") renderKeyboard();
+  renderMouse();
   syncKeyboardVisibility();
   if (focused >= 0) {
     const now = [...document.querySelectorAll("#app .nav")];
@@ -1956,6 +2565,7 @@ document.addEventListener("keydown", (e) => {
 
   if (e.key === "Tab") {  // jump between the menu and the on-screen keyboard
     e.preventDefault();
+    if (!onKey && kindOf(S.dev) !== "keyboard") return;
     if (onKey) (S.lastMenu?.isConnected ? S.lastMenu : menuNavs()[0])?.focus();
     else { S.lastMenu = tgt?.classList?.contains("nav") ? tgt : null; (KEY_BY_ID.get(S.kbFocus) || KEYS[0]).el.focus(); }
     return;
@@ -2068,7 +2678,7 @@ async function boot() {
     if (left > 0) await sleep(left);
   };
 
-  await phase("boot.init", 0, 0.15, 320, async () => { renderStatic(); renderBanner(); buildKeyboard(); render(); });
+  await phase("boot.init", 0, 0.15, 320, async () => { renderStatic(); renderBanner(); buildKeyboard(); buildMouse(); render(); });
   await phase("boot.assets", 0.15, 0.38, 380, async () => { makeGrain(); await document.fonts.ready; renderBanner(); });
   await phase("boot.hw", 0.38, 0.58, 380, async () => {
     if ("hid" in navigator) await refreshPaired(); else status("st.noHid");
@@ -2080,9 +2690,10 @@ async function boot() {
   await phase("boot.ready", 0.97, 1, 380);
   boot.done = true;
   fit();
-  $("boot").classList.add("out");
+  $("boot").remove();
   document.body.classList.remove("booting");
-  setTimeout(() => $("boot").remove(), 400);
+  requestAnimationFrame(() => requestAnimationFrame(() => $("curtain").classList.add("open")));
+  setTimeout(() => $("curtain").remove(), 1100);
   syncKeyboardVisibility();
   await animateBanner();
 }
